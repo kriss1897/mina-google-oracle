@@ -6,6 +6,12 @@ import axios from 'axios';
 import { Field, isReady, PrivateKey, Signature } from "snarkyjs";
 import * as jwt from 'jsonwebtoken';
 
+import { Contract, ethers } from 'ethers';
+
+import cors from 'cors';
+
+import ContractABI from './contracts/SampleAccounts';
+
 dotenv.config();
 
 const app: Express = express();
@@ -14,13 +20,17 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID as string;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET as string;
 const HOSTNAME = process.env.HOSTNAME;
 
+app.use(cors());
+
 app.get("/key", async (req: Request, res: Response) => {
   await isReady;
 
   const privateKey = PrivateKey.fromBase58(process.env.MINA_PRIVATE_KEY as string);
+  const wallet = new ethers.Wallet(process.env.ETH_PRIVATE_KEY as string)
 
   return res.json({
-    public: privateKey.toPublicKey().toBase58().toString()
+    mina: privateKey.toPublicKey().toBase58().toString(),
+    eth: wallet.address
   });
 });
 
@@ -77,6 +87,30 @@ app.get('/callback', async (req: Request, res: Response) => {
   redirectUrl.searchParams.append('google_id', googleId as string);
 
   return res.redirect(redirectUrl.toString());
+});
+
+app.get('/sync-owner/:address', async (req: Request, res: Response) => {
+  const ethAddress = req.params.address;
+  const provider = new ethers.providers.JsonRpcProvider(
+    "https://goerli.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161"
+  );
+  const wallet = new ethers.Wallet(process.env.ETH_PRIVATE_KEY as string, provider);
+
+  await isReady;
+
+  const contract = new Contract(ethAddress, ContractABI, wallet);
+  // const controller = ethers.utils.toUtf8String(await contract.controller()); 
+
+  // TODO: Query the new controller from the zk app account.
+  const newController = '0xD276589Ca84eF7A252C599a584FA0d711c416fF9';
+
+  const transaction = contract.claimAccount(ethers.utils.getAddress(newController));
+
+  await wallet.signTransaction(transaction);
+
+  wallet.sendTransaction(transaction);
+
+  return res.json({ hash: transaction.hash });
 });
 
 app.listen(port, () => {

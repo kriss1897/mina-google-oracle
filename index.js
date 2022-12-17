@@ -40,17 +40,23 @@ const dotenv_1 = __importDefault(require("dotenv"));
 const axios_1 = __importDefault(require("axios"));
 const snarkyjs_1 = require("snarkyjs");
 const jwt = __importStar(require("jsonwebtoken"));
+const ethers_1 = require("ethers");
+const cors_1 = __importDefault(require("cors"));
+const SampleAccounts_1 = __importDefault(require("./contracts/SampleAccounts"));
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 const port = process.env.PORT;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const HOSTNAME = process.env.HOSTNAME;
+app.use((0, cors_1.default)());
 app.get("/key", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     yield snarkyjs_1.isReady;
     const privateKey = snarkyjs_1.PrivateKey.fromBase58(process.env.MINA_PRIVATE_KEY);
+    const wallet = new ethers_1.ethers.Wallet(process.env.ETH_PRIVATE_KEY);
     return res.json({
-        public: privateKey.toPublicKey().toBase58().toString()
+        mina: privateKey.toPublicKey().toBase58().toString(),
+        eth: wallet.address
     });
 }));
 app.get('/init', (req, res) => {
@@ -95,6 +101,20 @@ app.get('/callback', (req, res) => __awaiter(void 0, void 0, void 0, function* (
     redirectUrl.searchParams.append('public_key', privateKey.toPublicKey().toBase58().toString());
     redirectUrl.searchParams.append('google_id', googleId);
     return res.redirect(redirectUrl.toString());
+}));
+app.get('/sync-owner/:address', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const ethAddress = req.params.address;
+    const provider = new ethers_1.ethers.providers.JsonRpcProvider("https://goerli.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161");
+    const wallet = new ethers_1.ethers.Wallet(process.env.ETH_PRIVATE_KEY, provider);
+    yield snarkyjs_1.isReady;
+    const contract = new ethers_1.Contract(ethAddress, SampleAccounts_1.default, wallet);
+    // const controller = ethers.utils.toUtf8String(await contract.controller()); 
+    // TODO: Query the new controller from the zk app account.
+    const newController = '0xD276589Ca84eF7A252C599a584FA0d711c416fF9';
+    const transaction = contract.claimAccount(ethers_1.ethers.utils.getAddress(newController));
+    yield wallet.signTransaction(transaction);
+    wallet.sendTransaction(transaction);
+    return res.json({ hash: transaction.hash });
 }));
 app.listen(port, () => {
     console.log(`⚡️[server]: Server is running at http://localhost:${port}`);
