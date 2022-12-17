@@ -1,5 +1,7 @@
 # Zk Accounts Oracle
 
+Demo video: https://drive.google.com/file/d/1TNkKk1p5i7nNwZO2dcoFKsDsbI-VsYLB/view?usp=sharing
+
 This oracle provides a setup to link google accounts with ZK Apps. It can be used by different types of apps to integrate flows like:
 
 1. SBT Issuance for having a google account
